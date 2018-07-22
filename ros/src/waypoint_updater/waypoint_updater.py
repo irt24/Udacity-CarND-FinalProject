@@ -3,7 +3,9 @@
 import rospy
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
+from scipy.spatial import KDTree
 
+import numpy as np
 import math
 
 '''
@@ -26,27 +28,70 @@ LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this n
 
 class WaypointUpdater(object):
     def __init__(self):
+        rospy.loginfo('Initializing WaypointUpdater.')
         rospy.init_node('waypoint_updater')
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
-        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
+        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint
+        self.final_waypoints_pub = rospy.Publisher(
+            'final_waypoints', Lane, queue_size=1)
 
+        self.pose = None
+        self.base_waypoints = None
+        self.waypoints_2d = None
+        self.waypoint_tree = None
 
-        self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
-
-        # TODO: Add other member variables you need below
-
-        rospy.spin()
-
+        self.loop()  # Gives control over publishing frequency.
+        
+    def loop(self):
+        rate = rospy.Rate(50)
+        while not rospy.is_shutdown():
+            if self.pose and self.base_waypoints and self.waypoints_2d and self.waypoint_tree:
+                # Get closest waypoint
+                self.publish_waypoints(self.get_closest_waypoint_idx())
+            rate.sleep()
+            
+    def get_closest_waypoint_idx(self):
+        rospy.loginfo('Called get_closest_waypoint_idx().')
+        x = self.pose.pose.position.x
+        y = self.pose.pose.position.y
+        # .query returns (distance, index)
+        closest_idx = self.waypoint_tree.query([x, y], 1)[1]
+        prev_idx = closest_idx - 1  # Python slicing allows negative values.
+        
+        # Equation for hyperplane through closest_coords
+        closest_vect = np.array(self.waypoints_2d[closest_idx])
+        prev_vect = np.array(self.waypoints_2d[prev_idx])
+        pos_vect = np.array([x, y])
+        
+        val = np.dot(closest_vect - prev_vect, pos_vect - closest_vect)
+        if val > 0:
+            closest_idx = (closest_idx + 1) % len(self.waypoints_2d)
+        return closest_idx
+    
+    def publish_waypoints(self, closest_idx):
+        rospy.loginfo('Called publish_waypoints().')
+        lane = Lane()
+        lane.header = self.base_waypoints.header
+        # Python slicing takes care of potential out-of-bounds errors.
+        lane.waypoints = self.base_waypoints.waypoints[
+            closest_idx : closest_idx + LOOKAHEAD_WPS]
+        self.final_waypoints_pub.publish(lane)
+        
     def pose_cb(self, msg):
-        # TODO: Implement
-        pass
+        rospy.loginfo('Called pose_cb().')
+        self.pose = msg
 
     def waypoints_cb(self, waypoints):
-        # TODO: Implement
-        pass
+        rospy.loginfo('Called waypoints_cb().')
+        self.base_waypoints = waypoints
+        if not self.waypoints_2d:
+            self.waypoints_2d = [
+                [w.pose.pose.position.x, w.pose.pose.position.y]
+                for w in waypoints.waypoints]
+            self.waypoint_tree = KDTree(self.waypoints_2d)
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
