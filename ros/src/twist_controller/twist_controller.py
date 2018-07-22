@@ -54,13 +54,12 @@ class Controller(object):
             self.throttle_controller.reset()
             return 0, 0, 0
         
-        rospy.logwarn("Target angular velocity: %f" % angular_vel)
-        rospy.logwarn("Target linear velocity: %f" % linear_vel)
-        rospy.logwarn("Current linear velocity: %f" % current_vel)
+        #rospy.logwarn("Target angular velocity: %f" % angular_vel)
+        #rospy.logwarn("Target linear velocity: %f" % linear_vel)
+        #rospy.logwarn("Current linear velocity: %f" % current_vel)
         
         current_time = rospy.get_time()
         current_vel = self.v_low_pass_filter.filt(current_vel)
-        rospy.logwarn("Filtered linear velocity: %f" % current_vel)
         vel_error = linear_vel - current_vel
 
         steering = self.yaw_controller.get_steering(
@@ -81,9 +80,9 @@ class Controller(object):
             decel = max(vel_error, self.decel_limit)
             brake = abs(decel) * self.vehicle_mass * self.wheel_radius
             
-        rospy.logwarn("Throttle: %f" % throttle)
-        rospy.logwarn("Brake: %f" % brake)
-        rospy.logwarn("Steering: %f" % steering)
+        #rospy.logwarn("Throttle: %f" % throttle)
+        #rospy.logwarn("Brake: %f" % brake)
+        #rospy.logwarn("Steering: %f" % steering)
         
         # Update object state.
         self.last_vel = current_vel

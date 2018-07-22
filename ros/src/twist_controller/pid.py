@@ -21,10 +21,10 @@ class PID(object):
         integral = self.int_val + error * sample_time;
         derivative = (error - self.last_error) / sample_time;
 
-        rospy.logwarn("(Throttle PID) Error: %f" % error)
-        rospy.logwarn("(Throttle PID) Sample time: %f" % sample_time)
-        rospy.logwarn("(Throttle PID) Integral: %f" % integral)
-        rospy.logwarn("(Throttle PID) Derivative: %f" % derivative)
+        #rospy.logwarn("(Throttle PID) Error: %f" % error)
+        #rospy.logwarn("(Throttle PID) Sample time: %f" % sample_time)
+        #rospy.logwarn("(Throttle PID) Integral: %f" % integral)
+        #rospy.logwarn("(Throttle PID) Derivative: %f" % derivative)
         
         val = self.kp * error + self.ki * integral + self.kd * derivative;
         if val > self.max:

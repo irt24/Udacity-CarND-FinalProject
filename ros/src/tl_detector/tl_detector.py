@@ -85,6 +85,7 @@ class TLDetector(object):
         # Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
         # of times till we start using it. Otherwise the previous stable state is
         # used.
+
         if self.state != state:
             self.state_count = 0
             self.state = state
@@ -95,10 +96,16 @@ class TLDetector(object):
             self.upcoming_red_light_pub.publish(Int32(light_wp))
         else:
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
+
+        if (state == TrafficLight.RED):
+            rospy.logwarn("Detected RED light! Count: %i" % self.state_count)
+        if (state == TrafficLight.GREEN):
+           rospy.logwarn("Detected GREEN light! Count: %i" % self.state_count)
+        
         self.state_count += 1
 
 
-    def get_closest_waypoint(self, pose):
+    def get_closest_waypoint(self, x, y):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
 
@@ -108,7 +115,7 @@ class TLDetector(object):
         Returns:
             int: index of the closest waypoint in self.waypoints
         """
-        return self.waypoint_tree.query([pose.x, pose.y], 1)[1]
+        return self.waypoint_tree.query([x, y], 1)[1]
 
 
     def get_light_state(self, light):
@@ -144,16 +151,22 @@ class TLDetector(object):
         closest_stop_line_idx = -1 
 
         stop_line_positions = self.config['stop_line_positions']
-        min_distance_to_stop_line = len(self.waypoints.waypoints)
 
         if (self.pose):
-            car_waypoint_idx = self.get_closest_waypoint(self.pose.pose)
+            car_waypoint_idx = self.get_closest_waypoint(self.pose.pose.position.x,
+                                                         self.pose.pose.position.y)
+
             # Find the closest visible traffic light.
             # Since the list of lights is short (~8), there isn't much benefit in using KD trees.
-            for light, stop_line in zip (self.lights, stop_line_positions):
-                stop_line_idx = self.get_closest_waypoint(stop_line)
+            min_distance_to_stop_line = len(self.waypoints.waypoints)
+            for light, stop_line in zip(self.lights, stop_line_positions):
+                stop_line_idx = self.get_closest_waypoint(stop_line[0], stop_line[1])
                 distance_to_stop_line = stop_line_idx - car_waypoint_idx
-                if 0 <= distance_to_stop_line <= min_distance_to_stop_line:
+                # -10 is key to getting the simualtor to work (at least on my not-so-powerful machine).
+                # The simulator is laggy and reports the position further ahead that it displays it.
+                # Often, when the car is in front of a red traffic light, it doesn't stop because it
+                # thinks it's past it.
+                if -10 <= distance_to_stop_line <= min_distance_to_stop_line:
                     min_distance_to_stop_line = distance_to_stop_line
                     closest_light = light
                     closest_stop_line_idx = stop_line_idx  

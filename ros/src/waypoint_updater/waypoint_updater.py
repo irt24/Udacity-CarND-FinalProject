@@ -25,6 +25,9 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+MAX_DECEL = 1
+MIN_SPEED = 0.1  # m/s
+LAG_THRESHOLD = 10
 
 
 class WaypointUpdater(object):
@@ -78,25 +81,30 @@ class WaypointUpdater(object):
         # Python slicing takes care of potential out-of-bounds errors.
         waypoint_slice = self.base_waypoints.waypoints[closest_idx : farthest_idx]
 
-        lane.waypoints = (
-            waypoint_slice 
-            if self.stop_line_idx == -1 or self.stop_line_idx >= farthest_idx
-            else self.decelerate_waypoints(waypoint_slice, closest_idx))
+        rospy.logwarn("current_index: %i" % closest_idx)
+        rospy.logwarn("stop_line_index: %i" % self.stop_line_idx)
+        rospy.logwarn("Stop line is far ahead: " + str(self.stop_line_idx >= farthest_idx))
 
+        if (self.stop_line_idx == -1 or self.stop_line_idx >= farthest_idx):
+            lane.waypoints = waypoint_slice
+            rospy.logwarn("Continuing at normal speed.")
+        else:
+            lane.waypoints = self.decelerate_waypoints(waypoint_slice, closest_idx)
+            rospy.logwarn("Decelerating.")
+       
         self.final_waypoints_pub.publish(lane)
 
     def decelerate_waypoints(self, waypoints, closest_idx):
-        rospy.logwarn('DECELERATING WAYPOINTS!!!')
         temp = []
         for i, old_waypoint in enumerate(waypoints):
-            new_waypoint = Wapoint()
+            new_waypoint = Waypoint()
             new_waypoint.pose = old_waypoint.pose
-            # Stop two points back from line so front of car stops at line.
-            stop_idx = max(self.stop_line_idx - closest_idx - 2, 0)
+            # Stop a few points back from line so front of car stops at line.
+            stop_idx = max(self.stop_line_idx - closest_idx - 10, 0)
             distance = self.distance(waypoints, i, stop_idx)
-            speed = math.sqrt(2 * MAX_DECEL * distance)
-            if speed < MIN_SPEED:
-                speed = 0
+            velocity = math.sqrt(2 * MAX_DECEL * distance)
+            if velocity < MIN_SPEED:
+                velocity = 0
             # This prevents exceeding the speed limit.
             new_waypoint.twist.twist.linear.x = min(velocity, old_waypoint.twist.twist.linear.x)
             temp.append(new_waypoint)
@@ -115,8 +123,6 @@ class WaypointUpdater(object):
 
     def traffic_cb(self, msg):
         self.stop_line_idx = msg.data
-        rospy.logwarn("STOP LINE IDX: %i" % self.stop_line_idx)
-        rospy.logwarn("CLOSEST IDX: %i" % self.get_closest_waypoint_idx())
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
