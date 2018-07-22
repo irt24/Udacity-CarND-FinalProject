@@ -8,16 +8,10 @@ GAS_DENSITY = 2.858
 ONE_MPH= 0.44704
 MIN_SPEED = 0.1  # m/s
 
-# The PID values are taken from the walk-through video.
-# They explain the values were determined experimentally.
-# some_dude/mine/course
-# PID_KP = 0.3#0.2    #0.3  # proportional term for PID
-# PID_KI = 0.003#0.0004 #0.1  # integral term for PID
-# PID_KD = 4.0#3.0    #0.0  # derivative term for PID
-
-PID_KP = 1.0
-PID_KI = 0.1
-PID_KD = 10.0
+# Tuned in previous PID project.
+PID_KP = 0.2 
+PID_KI = 0.0004
+PID_KD = 3.0
 
 MIN_THROTTLE = 0.0
 MAX_THROTTLE = 0.2

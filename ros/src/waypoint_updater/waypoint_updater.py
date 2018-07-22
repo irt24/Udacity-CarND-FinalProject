@@ -2,6 +2,7 @@
 
 import rospy
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Int32
 from styx_msgs.msg import Lane, Waypoint
 from scipy.spatial import KDTree
 
@@ -33,15 +34,14 @@ class WaypointUpdater(object):
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
-
-        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint
-        self.final_waypoints_pub = rospy.Publisher(
-            'final_waypoints', Lane, queue_size=1)
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         self.pose = None
         self.base_waypoints = None
         self.waypoints_2d = None
         self.waypoint_tree = None
+        self.stop_line_idx = -1
 
         self.loop()  # Gives control over publishing frequency.
         
@@ -49,12 +49,10 @@ class WaypointUpdater(object):
         rate = rospy.Rate(50)
         while not rospy.is_shutdown():
             if self.pose and self.base_waypoints and self.waypoints_2d and self.waypoint_tree:
-                # Get closest waypoint
                 self.publish_waypoints(self.get_closest_waypoint_idx())
             rate.sleep()
             
     def get_closest_waypoint_idx(self):
-        rospy.loginfo('Called get_closest_waypoint_idx().')
         x = self.pose.pose.position.x
         y = self.pose.pose.position.y
         # .query returns (distance, index)
@@ -72,20 +70,42 @@ class WaypointUpdater(object):
         return closest_idx
     
     def publish_waypoints(self, closest_idx):
-        rospy.loginfo('Called publish_waypoints().')
         lane = Lane()
         lane.header = self.base_waypoints.header
+
+        closest_idx = self.get_closest_waypoint_idx()
+        farthest_idx = closest_idx + LOOKAHEAD_WPS
         # Python slicing takes care of potential out-of-bounds errors.
-        lane.waypoints = self.base_waypoints.waypoints[
-            closest_idx : closest_idx + LOOKAHEAD_WPS]
+        waypoint_slice = self.base_waypoints.waypoints[closest_idx : farthest_idx]
+
+        lane.waypoints = (
+            waypoint_slice 
+            if self.stop_line_idx == -1 or self.stop_line_idx >= farthest_idx
+            else self.decelerate_waypoints(waypoint_slice, closest_idx))
+
         self.final_waypoints_pub.publish(lane)
+
+    def decelerate_waypoints(self, waypoints, closest_idx):
+        rospy.logwarn('DECELERATING WAYPOINTS!!!')
+        temp = []
+        for i, old_waypoint in enumerate(waypoints):
+            new_waypoint = Wapoint()
+            new_waypoint.pose = old_waypoint.pose
+            # Stop two points back from line so front of car stops at line.
+            stop_idx = max(self.stop_line_idx - closest_idx - 2, 0)
+            distance = self.distance(waypoints, i, stop_idx)
+            speed = math.sqrt(2 * MAX_DECEL * distance)
+            if speed < MIN_SPEED:
+                speed = 0
+            # This prevents exceeding the speed limit.
+            new_waypoint.twist.twist.linear.x = min(velocity, old_waypoint.twist.twist.linear.x)
+            temp.append(new_waypoint)
+        return temp
         
     def pose_cb(self, msg):
-        rospy.loginfo('Called pose_cb().')
         self.pose = msg
 
     def waypoints_cb(self, waypoints):
-        rospy.loginfo('Called waypoints_cb().')
         self.base_waypoints = waypoints
         if not self.waypoints_2d:
             self.waypoints_2d = [
@@ -94,8 +114,9 @@ class WaypointUpdater(object):
             self.waypoint_tree = KDTree(self.waypoints_2d)
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
-        pass
+        self.stop_line_idx = msg.data
+        rospy.logwarn("STOP LINE IDX: %i" % self.stop_line_idx)
+        rospy.logwarn("CLOSEST IDX: %i" % self.get_closest_waypoint_idx())
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
