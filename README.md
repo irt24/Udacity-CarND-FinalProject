@@ -1,74 +1,31 @@
-This is the project repo for the final project of the Udacity Self-Driving Car Nanodegree: Programming a Real Self-Driving Car. For more information about the project, see the project introduction [here](https://classroom.udacity.com/nanodegrees/nd013/parts/6047fe34-d93c-4f50-8336-b70ef10cb4b2/modules/e1a23b06-329a-4684-a717-ad476f0d8dff/lessons/462c933d-9f24-42d3-8bdc-a08a5fc866e4/concepts/5ab4b122-83e6-436d-850f-9f4d26627fd9).
+Project Highlights
+===
+TL;DR: [video](https://photos.app.goo.gl/M9vKVHGetSomF5Rr7)
 
-Please use **one** of the two installation options, either native **or** docker installation.
+This is a complete individual submission for the final project of the Udacity Self-Driving Car Nanodegree. It is **not** part of a team submission, and is therefore meant to run on a simulator. The associated e-mail address is turc.raluca@gmail.com.
 
-### Native Installation
+The code mostly follows the walk-throughs, with some additional handling of the simulator lag. The single hardest aspect of the project was dealing with the high resource demands of the simulator. If not enough resource demands are allocated, the simulator introduces lag, which critically affects driving quality: the position of the car in the video stream does not agree with the reported position of the car, and errors keep accummulating.
 
-* Be sure that your workstation is running Ubuntu 16.04 Xenial Xerus or Ubuntu 14.04 Trusty Tahir. [Ubuntu downloads can be found here](https://www.ubuntu.com/download/desktop).
-* If using a Virtual Machine to install Ubuntu, use the following configuration as minimum:
-  * 2 CPU
-  * 2 GB system memory
-  * 25 GB of free hard drive space
+Here are the set-ups that I experimented with:
+1. **Capstone workspace**. Despite having GPU enabled, the workspace could not keep up with the simulator demands. Regardless of how much the hyperparameters were tuned, the car simply drifted away from the road.
+1. **MacBook Air (ROS in UbuntuVM + simulator in MacOS)**. Running ROS in a local Ubuntu VM with port forwarding and the simualtor in MacOS led to similar behavior.
+1. **MacBook Pro (ROS in UbuntuVM + simulator in MacOS)**. This was the most reasonable configuration, even though I had to carefully tweak it. Using the same hyperparameters as in the previous two configurations, with camera off, the car follows the waypoints smoothly. However, when turning the camera on, the lag starts to become visible. To keep the computational load under control, I had to turn the camera off periodically, whenever the car was far away from traffic lights. Also, I couldn't record the screen at the same time (using e.g QuickTime), because the car would quickly start drifting away. That explains the potato quality :)
 
-  The Udacity provided virtual machine has ROS and Dataspeed DBW already installed, so you can skip the next two steps if you are using this.
+I implemented one additional hack to deal with the simulator lag. Since the true car position lags behind the reported one, the car doesn't stop at traffic lights; when the car in the video stream gets close to a stop line, it mistakenly thinks it has already passed it. So whenever the closest stop line is less than 10 waypoints behind, I make the assumption that the car hasn't passed it. This strategy, combined with carefully turning off the camera at the right time, gets the car to smoothly follow the waypoints and stop at the red traffic lights. See the video linked above.
 
-* Follow these instructions to install ROS
-  * [ROS Kinetic](http://wiki.ros.org/kinetic/Installation/Ubuntu) if you have Ubuntu 16.04.
-  * [ROS Indigo](http://wiki.ros.org/indigo/Installation/Ubuntu) if you have Ubuntu 14.04.
-* [Dataspeed DBW](https://bitbucket.org/DataspeedInc/dbw_mkz_ros)
-  * Use this option to install the SDK on a workstation that already has ROS installed: [One Line SDK Install (binary)](https://bitbucket.org/DataspeedInc/dbw_mkz_ros/src/81e63fcc335d7b64139d7482017d6a97b405e250/ROS_SETUP.md?fileviewer=file-view-default)
-* Download the [Udacity Simulator](https://github.com/udacity/CarND-Capstone/releases).
-
-### Docker Installation
-[Install Docker](https://docs.docker.com/engine/installation/)
-
-Build the docker container
-```bash
-docker build . -t capstone
-```
-
-Run the docker file
-```bash
-docker run -p 4567:4567 -v $PWD:/capstone -v /tmp/log:/root/.ros/ --rm -it capstone
-```
-
-### Port Forwarding
-To set up port forwarding, please refer to the [instructions from term 2](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/0949fca6-b379-42af-a919-ee50aa304e6a/lessons/f758c44c-5e40-4e01-93b5-1a82aa4e044f/concepts/16cf4a78-4fc7-49e1-8621-3450ca938b77)
-
-### Usage
-
-1. Clone the project repository
-```bash
-git clone https://github.com/udacity/CarND-Capstone.git
-```
-
-2. Install python dependencies
-```bash
-cd CarND-Capstone
-pip install -r requirements.txt
-```
-3. Make and run styx
-```bash
-cd ros
-catkin_make
-source devel/setup.sh
-roslaunch launch/styx.launch
-```
-4. Run the simulator
-
-### Real world testing
-1. Download [training bag](https://s3-us-west-1.amazonaws.com/udacity-selfdrivingcar/traffic_light_bag_file.zip) that was recorded on the Udacity self-driving car.
-2. Unzip the file
-```bash
-unzip traffic_light_bag_file.zip
-```
-3. Play the bag file
-```bash
-rosbag play -l traffic_light_bag_file/traffic_light_training.bag
-```
-4. Launch your project in site mode
-```bash
-cd CarND-Capstone/ros
-roslaunch launch/site.launch
-```
-5. Confirm that traffic light detection works on real life images
+Submission checklist:
+===
+- *Launch correctly using the launch files provided in the capstone repro.*
+  There were no changes to the launch scripts.
+- *Smoothly follow waypoints in the simulator*.
+  Given the right computational resources, the car does smootly follow the waypoints. Turning the camera on for long periods of time gets the car off the road. I checked that processing the camera data itself is not the cause of drift by running the simulation with camera on while completely ignoring the traffic light information extracted from the camera and observing the car get off the road.
+- *Respect the target top speed for the waypoints.*
+  `waypoints_updater` reads in the configured speed limit and, by default, assigns this speed to all waypoints. Later, it might decide to decelerate some of the points in anticipation of red traffic lights. Experimentally, setting `MAX_THROTTLE = 0.2` seems to keep the car within the legal speed limit.
+- *Stop at traffic lights when needed.*
+  The car does stop at traffic lights after implementing the hack that deals with the lag (see explanation above).
+- *Stop and restart PID controllers depending on the state of /vehicle/dbw_enabled.*
+  `twist_controller` checks whether `dbw` is enabled; when not, it resets the PID controller and sets the throttle, break and steering angle to 0.
+- *Publish throttle, steering, and brake commands at 50Hz.*
+  The loop in `dbw_node` publishes the three values at a rate of 50 Hz. 
+  
+  
